@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #0c0f17;
+    color: #e2e8f0;
+    overflow-x: hidden;
+  }
+}
+
+.font-balochi {
+  font-family: 'Amiri', 'Noto Nastaliq Urdu', 'Scheherazade New', serif;
+  line-height: 2.2;
+  direction: rtl;
+}
+
+.font-display {
+  font-family: 'Cinzel', serif;
+}
+
+/* Balochi geometric embroidered motif pattern */
+.baloch-pattern {
+  background-color: #0c0f17;
+  background-image: radial-gradient(rgba(217, 119, 6, 0.12) 1px, transparent 0),
+                    radial-gradient(rgba(14, 165, 233, 0.08) 1px, #0c0f17 1px);
+  background-size: 32px 32px;
+  background-position: 0 0, 16px 16px;
+}
+
+/* Atmospheric wave glow */
+.wave-glow {
+  box-shadow: 0 0 35px -5px rgba(217, 119, 6, 0.25), 0 0 15px -2px rgba(14, 165, 233, 0.2);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #d97706;
+}
+
+/* Pulse animation for active TTS recitation */
+@keyframes audio-pulse {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-audio-bar {
+  animation: audio-pulse 1.2s ease-in-out infinite;
+}

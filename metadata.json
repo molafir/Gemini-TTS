@@ -1,0 +1,6 @@
+{
+  "name": "O Mardaaren Baloch - Voice & Poetry",
+  "description": "Interactive Balochi poetry reader and speech reciter for Mir Gul Khan Naseer's legendary poem 'O Mardaaren Baloch' powered by Gemini 3.8 Flash TTS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
