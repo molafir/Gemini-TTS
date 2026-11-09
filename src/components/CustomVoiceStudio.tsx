@@ -28,11 +28,14 @@ import {
   RefreshCw,
   Radio,
   Music,
+  Gauge,
+  Cpu,
 } from 'lucide-react';
 import { TTS_VOICES, TTS_STYLES, POEM_VERSES, TtsStyle } from '../data/poem';
 import {
   requestSpeech,
   downloadAudioFile,
+  downloadAudioFileAsMp3,
   composeBalochiPoem,
   analyzeBalochiText,
   tagMultiSpeakerPoem,
@@ -42,6 +45,13 @@ import {
   MultiSpeakerSegment,
   MultiSpeakerRole,
 } from '../services/ttsService';
+import {
+  TOKEN_LIMIT_PRESETS,
+  estimateTokenCount,
+  formatTokenUsage,
+  TokenUsageMetadata,
+} from '../utils/tokenUtils';
+import { TokenLimitControl } from './TokenLimitControl';
 
 interface CustomVoiceStudioProps {
   onPlayCustomAudio: (audioUrl: string, trackLabel: string, voiceName: string) => void;
@@ -65,6 +75,10 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
   const [isComposing, setIsComposing] = useState<boolean>(false);
   const [composeError, setComposeError] = useState<string | null>(null);
   const [composedPoem, setComposedPoem] = useState<ComposedPoem | null>(null);
+
+  // ==================== TOKEN LIMIT & USAGE STATE ====================
+  const [maxOutputTokens, setMaxOutputTokens] = useState<number>(1000);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageMetadata | null>(null);
 
   // ==================== RECITE & TEXT STATE ====================
   const [inputText, setInputText] = useState<string>(
@@ -187,10 +201,12 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
         text: textToTag,
         speakerCount: speakers,
         mode: 'dialogue',
+        maxOutputTokens,
       });
 
       if (res.success && res.multiSpeakerData) {
         setMultiSpeakerData(res.multiSpeakerData);
+        if (res.usageMetadata) setTokenUsage(res.usageMetadata);
         // Initialize speaker voices map
         const newVoicesMap: Record<string, string> = {};
         res.multiSpeakerData.speakers.forEach((spk) => {
@@ -219,10 +235,12 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
         dialect,
         mood,
         verseCount,
+        maxOutputTokens,
       });
 
       if (res.success && res.poem) {
         setComposedPoem(res.poem);
+        if (res.usageMetadata) setTokenUsage(res.usageMetadata);
         setInputText(res.poem.fullBalochiText);
 
         // If currently in multi-speaker mode, immediately auto-tag the new poem!
@@ -248,9 +266,10 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
     setIsAnalyzing(true);
     setAnalysisError(null);
     try {
-      const res = await analyzeBalochiText(inputText);
+      const res = await analyzeBalochiText(inputText, maxOutputTokens);
       if (res.success && res.analysis) {
         setAnalysisResult(res.analysis);
+        if (res.usageMetadata) setTokenUsage(res.usageMetadata);
       } else {
         setAnalysisError(res.error || 'خطا در تحلیل متن بلوچی');
       }
@@ -445,6 +464,21 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
     }
   };
 
+  const [isDownloadingMp3, setIsDownloadingMp3] = useState<boolean>(false);
+
+  const handleDownloadMp3 = async () => {
+    if (!audioUrl || isDownloadingMp3) return;
+    try {
+      setIsDownloadingMp3(true);
+      await downloadAudioFileAsMp3(audioUrl, `balochi-studio-${selectedVoice.toLowerCase()}.mp3`);
+    } catch (e) {
+      console.error('Download MP3 failed:', e);
+      handleDownload();
+    } finally {
+      setIsDownloadingMp3(false);
+    }
+  };
+
   const handleDownload = () => {
     if (audioUrl) {
       downloadAudioFile(audioUrl, `balochi-recitation-${selectedVoice.toLowerCase()}.wav`);
@@ -603,6 +637,12 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
                 placeholder="مثال: درباره غیرت جوانان بلوچ در برابر طوفان حوادث و وفاداری به وطن..."
                 className="w-full p-3.5 rounded-xl bg-slate-950/80 border border-slate-700 text-slate-100 text-sm focus:border-amber-500 focus:outline-none placeholder:text-slate-600"
               />
+              <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                <span>موضوع دلخواه، واژگان خاص یا پیامی که مایلید در شعر باشد</span>
+                <span className="text-amber-400">
+                  تخمین توکن ورودی: ~{estimateTokenCount(customTopic || theme)} توکن
+                </span>
+              </div>
             </div>
 
             {/* Poetic Parameters Grid */}
@@ -667,6 +707,14 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
               </div>
             </div>
 
+            {/* Token Limit Settings */}
+            <TokenLimitControl
+              value={maxOutputTokens}
+              onChange={setMaxOutputTokens}
+              usageMetadata={tokenUsage}
+              title="محدودیت و سقف توکن سرایش شعر بلوچی (Token Limit)"
+            />
+
             {/* Error banner */}
             {composeError && (
               <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-xs text-rose-300 flex items-center gap-2">
@@ -713,6 +761,12 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
                     <p className="text-xs text-slate-400 mt-1">
                       وزن شعری: <span className="text-slate-300 font-mono">{composedPoem.poeticMeter}</span>
                     </p>
+                  )}
+                  {tokenUsage && tokenUsage.totalTokenCount && (
+                    <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] font-mono text-emerald-400 w-fit">
+                      <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>مصرف توکن هوش مصنوعی: {formatTokenUsage(tokenUsage)}</span>
+                    </div>
                   )}
                 </div>
 
@@ -903,7 +957,11 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
               <label htmlFor="custom-balochi-input" className="text-xs font-semibold text-slate-300">
                 متن شعر بلوچی شما برای دکلمه و خوانش:
               </label>
-              <div className="flex items-center gap-3 text-xs text-slate-500">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span className="px-2 py-0.5 rounded-md bg-slate-800 font-mono text-[11px] text-amber-300">
+                  تخمین: ~{estimateTokenCount(inputText)} توکن
+                </span>
+                <span>•</span>
                 <span>{inputText.split('\n').filter((l) => l.trim()).length} سطر</span>
                 <span>•</span>
                 <span className="font-mono">{inputText.length} کاراکتر</span>
@@ -923,6 +981,14 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
               placeholder="شعر یا متن بلوچی را در این کادر بنویسید یا الصاق کنید..."
             />
           </div>
+
+          {/* Token Limit Settings for Mode 2 */}
+          <TokenLimitControl
+            value={maxOutputTokens}
+            onChange={setMaxOutputTokens}
+            usageMetadata={tokenUsage}
+            title="محدودیت و سقف توکن تحلیل، ترجمه و تقسیم‌بندی (Token Limit)"
+          />
 
           {/* Analysis / Phonetic Helper Trigger */}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1393,17 +1459,30 @@ export const CustomVoiceStudio: React.FC<CustomVoiceStudioProps> = ({ onPlayCust
 
                 <div className="px-2">
                   <div className="text-xs font-semibold text-slate-200">صوت دکلمه آماده است</div>
-                  <div className="text-[10px] text-amber-400 font-mono">۲۴ کیلوهرتز WAV</div>
+                  <div className="text-[10px] text-amber-400 font-mono">کیفیت استودیویی • MP3 / WAV</div>
                 </div>
 
-                <button
-                  onClick={handleDownload}
-                  className="p-2.5 rounded-xl bg-slate-900 text-slate-300 hover:text-amber-300 hover:bg-slate-800 transition-colors border border-slate-800"
-                  title="دانلود فایل صوتی WAV"
-                  aria-label="دانلود فایل صوتی WAV"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleDownloadMp3}
+                    disabled={isDownloadingMp3}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-colors shadow-sm disabled:opacity-75"
+                    title="دانلود فایل صوتی با فرمت MP3"
+                    aria-label="دانلود MP3"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{isDownloadingMp3 ? 'در حال تبدیل MP3...' : 'دانلود MP3'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownload}
+                    className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition-colors border border-slate-800 text-[11px] font-mono"
+                    title="دانلود فایل صوتی خام WAV"
+                    aria-label="دانلود WAV"
+                  >
+                    WAV
+                  </button>
+                </div>
               </div>
             )}
           </div>

@@ -13,9 +13,12 @@ import {
   Zap,
   Info,
   Loader2,
+  Gauge,
+  Cpu,
 } from 'lucide-react';
 import { ChatMessage, ChatPersonaId, CHAT_PERSONAS } from '../utils/chatUtils';
 import { requestSpeech } from '../services/ttsService';
+import { estimateTokenCount, formatTokenUsage } from '../utils/tokenUtils';
 
 interface GeminiChatbotProps {
   onPlaySpeech: (audioUrl: string, trackLabel: string, voiceName: string) => void;
@@ -24,6 +27,7 @@ interface GeminiChatbotProps {
 export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ onPlaySpeech }) => {
   const [selectedPersonaId, setSelectedPersonaId] = useState<ChatPersonaId>('naseer');
   const [selectedModel, setSelectedModel] = useState<'gemini-3.8-flash' | 'gemini-3.1-flash-lite'>('gemini-3.8-flash');
+  const [chatMaxTokens, setChatMaxTokens] = useState<number>(800);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -97,6 +101,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ onPlaySpeech }) =>
           message: text,
           model: selectedModel,
           systemInstruction: activePersona.systemInstruction,
+          maxOutputTokens: chatMaxTokens,
         }),
       });
 
@@ -111,6 +116,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ onPlaySpeech }) =>
         role: 'model',
         text: data.reply,
         timestamp: Date.now(),
+        usageMetadata: data.usageMetadata,
       };
 
       setMessages([...newHistory, botMsg]);
@@ -202,6 +208,22 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ onPlaySpeech }) =>
                 <Zap className="w-3 h-3" />
                 <span>3.1 Lite</span>
               </button>
+            </div>
+
+            {/* Token Limit Selector */}
+            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1 text-xs gap-1.5" title="سقف توکن پاسخ هوش مصنوعی">
+              <Gauge className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <select
+                value={chatMaxTokens}
+                onChange={(e) => setChatMaxTokens(parseInt(e.target.value, 10))}
+                className="bg-transparent text-slate-300 font-mono text-[11px] focus:outline-none cursor-pointer"
+                aria-label="سقف توکن خروجی چت"
+              >
+                <option value={300} className="bg-slate-900 text-slate-200">۳۰۰ توکن (کوتاه)</option>
+                <option value={800} className="bg-slate-900 text-slate-200">۸۰۰ توکن (متعادل)</option>
+                <option value={1500} className="bg-slate-900 text-slate-200">۱۵۰۰ توکن (کامل)</option>
+                <option value={3000} className="bg-slate-900 text-slate-200">۳۰۰۰ توکن (حداکثر)</option>
+              </select>
             </div>
 
             <button
@@ -296,6 +318,16 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ onPlaySpeech }) =>
                       {selectedModel}
                     </span>
                     <div className="flex items-center gap-2">
+                      {msg.usageMetadata?.totalTokenCount && (
+                        <span
+                          className="text-[10px] font-mono text-slate-500 hover:text-slate-300 flex items-center gap-1 cursor-default transition-colors"
+                          title={formatTokenUsage(msg.usageMetadata)}
+                        >
+                          <Cpu className="w-2.5 h-2.5 text-slate-400" />
+                          <span>{msg.usageMetadata.totalTokenCount} توکن</span>
+                        </span>
+                      )}
+
                       <button
                         onClick={() => handleSpeak(msg)}
                         disabled={speakingMessageId === msg.id}
@@ -371,14 +403,21 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ onPlaySpeech }) =>
         }}
         className="p-3 sm:p-4 bg-slate-950 border-t border-slate-800 flex items-center gap-2"
       >
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder={`Message ${activePersona.name} (in Balochi, English, or Persian)...`}
-          disabled={isLoading}
-          className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none transition-all"
-        />
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={`Message ${activePersona.name} (in Balochi, English, or Persian)...`}
+            disabled={isLoading}
+            className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl px-4 py-3 pl-24 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none transition-all"
+          />
+          {inputValue.trim() && (
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-amber-400/90 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800 pointer-events-none">
+              ~{estimateTokenCount(inputValue)} توکن
+            </span>
+          )}
+        </div>
 
         <button
           type="submit"

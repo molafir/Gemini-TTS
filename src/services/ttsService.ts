@@ -14,6 +14,8 @@ export function clearAudioCache() {
   audioCache.clear();
 }
 
+import { TokenUsageMetadata } from '../utils/tokenUtils';
+
 export interface ComposedPoemVerse {
   balochi: string;
   transliteration: string;
@@ -117,7 +119,7 @@ export async function requestSpeech(
 }
 
 /**
- * Request AI Balochi poetry composition from gemini-3.8-flash
+ * Request AI Balochi poetry composition from gemini-3.8-flash (with token limit control)
  */
 export async function composeBalochiPoem(params: {
   theme: string;
@@ -126,7 +128,14 @@ export async function composeBalochiPoem(params: {
   mood?: string;
   customTopic?: string;
   verseCount?: number;
-}): Promise<{ success: boolean; poem?: ComposedPoem; error?: string }> {
+  maxOutputTokens?: number;
+}): Promise<{
+  success: boolean;
+  poem?: ComposedPoem;
+  usageMetadata?: TokenUsageMetadata;
+  tokenLimit?: number;
+  error?: string;
+}> {
   try {
     const res = await fetch('/api/compose-poem', {
       method: 'POST',
@@ -137,7 +146,12 @@ export async function composeBalochiPoem(params: {
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Failed to compose Balochi poetry');
     }
-    return { success: true, poem: data.poem };
+    return {
+      success: true,
+      poem: data.poem,
+      usageMetadata: data.usageMetadata,
+      tokenLimit: data.tokenLimit,
+    };
   } catch (err: any) {
     console.error('composeBalochiPoem error:', err);
     return { success: false, error: err.message || 'Poem generation failed' };
@@ -145,24 +159,34 @@ export async function composeBalochiPoem(params: {
 }
 
 /**
- * Request AI analysis, transliteration, and recitation optimization for custom Balochi text
+ * Request AI analysis, transliteration, and recitation optimization for custom Balochi text (with token limit control)
  */
-export async function analyzeBalochiText(text: string): Promise<{
+export async function analyzeBalochiText(
+  text: string,
+  maxOutputTokens?: number
+): Promise<{
   success: boolean;
   analysis?: BalochiAnalysis;
+  usageMetadata?: TokenUsageMetadata;
+  tokenLimit?: number;
   error?: string;
 }> {
   try {
     const res = await fetch('/api/analyze-balochi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, maxOutputTokens }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Failed to analyze Balochi text');
     }
-    return { success: true, analysis: data.analysis };
+    return {
+      success: true,
+      analysis: data.analysis,
+      usageMetadata: data.usageMetadata,
+      tokenLimit: data.tokenLimit,
+    };
   } catch (err: any) {
     console.error('analyzeBalochiText error:', err);
     return { success: false, error: err.message || 'Analysis failed' };
@@ -170,13 +194,20 @@ export async function analyzeBalochiText(text: string): Promise<{
 }
 
 /**
- * Request AI multi-speaker segmentation and tagging for Balochi poetry
+ * Request AI multi-speaker segmentation and tagging for Balochi poetry (with token limit control)
  */
 export async function tagMultiSpeakerPoem(params: {
   text: string;
   speakerCount?: number;
   mode?: string;
-}): Promise<{ success: boolean; multiSpeakerData?: MultiSpeakerData; error?: string }> {
+  maxOutputTokens?: number;
+}): Promise<{
+  success: boolean;
+  multiSpeakerData?: MultiSpeakerData;
+  usageMetadata?: TokenUsageMetadata;
+  tokenLimit?: number;
+  error?: string;
+}> {
   try {
     const res = await fetch('/api/multi-speaker-tag', {
       method: 'POST',
@@ -187,7 +218,12 @@ export async function tagMultiSpeakerPoem(params: {
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Failed to partition and tag poem for multi-speakers');
     }
-    return { success: true, multiSpeakerData: data.multiSpeakerData };
+    return {
+      success: true,
+      multiSpeakerData: data.multiSpeakerData,
+      usageMetadata: data.usageMetadata,
+      tokenLimit: data.tokenLimit,
+    };
   } catch (err: any) {
     console.error('tagMultiSpeakerPoem error:', err);
     return { success: false, error: err.message || 'Multi-speaker tagging failed' };
@@ -207,6 +243,23 @@ export function downloadAudioFile(audioDataUrl: string, filename: string = 'balo
     document.body.removeChild(link);
   } catch (e) {
     console.error('Audio download failed:', e);
+  }
+}
+
+/**
+ * Converts audio data URL to MP3 and triggers browser download
+ */
+export async function downloadAudioFileAsMp3(
+  audioDataUrl: string,
+  filename: string = 'balochi-poetry-recitation.mp3'
+) {
+  try {
+    const { convertWavToMp3Blob, downloadBlob } = await import('../utils/audioUtils');
+    const mp3Blob = await convertWavToMp3Blob(audioDataUrl);
+    downloadBlob(mp3Blob, filename.endsWith('.mp3') ? filename : `${filename}.mp3`);
+  } catch (e) {
+    console.error('MP3 download fallback:', e);
+    downloadAudioFile(audioDataUrl, filename);
   }
 }
 

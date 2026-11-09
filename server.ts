@@ -116,11 +116,15 @@ app.post('/api/compose-poem', async (req: Request, res: Response) => {
       mood = 'حماسی و انگیزشی',
       customTopic = '',
       verseCount = 4,
+      maxOutputTokens = 1200,
     } = req.body;
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(503).json({ error: 'GEMINI_API_KEY is not configured.' });
     }
+
+    // Validate and clamp maxOutputTokens limit (between 200 and 4096)
+    const clampedTokens = Math.min(4096, Math.max(200, Number(maxOutputTokens) || 1200));
 
     const systemInstruction = `You are a renowned master Balochi poet and literary scholar (استاد و شاهر نامدار بلوچستان).
 Your task is to compose authentic, beautiful, and linguistically accurate Balochi poetry.
@@ -160,6 +164,7 @@ Return JSON with this schema:
 }`;
 
     let responseText = '';
+    let usageMetadata: any = null;
     const contents = [{ role: 'user' as const, parts: [{ text: userPrompt }] }];
 
     try {
@@ -167,17 +172,25 @@ Return JSON with this schema:
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite',
         contents,
-        config: systemInstruction ? { systemInstruction } : undefined,
+        config: {
+          systemInstruction,
+          maxOutputTokens: clampedTokens,
+        },
       });
       responseText = response.text || '{}';
+      usageMetadata = response.usageMetadata;
     } catch (primaryErr: any) {
       console.warn('Error with gemini-3.1-flash-lite, trying gemini-3.8-flash:', primaryErr?.message);
       const fallbackResponse = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents,
-        config: systemInstruction ? { systemInstruction } : undefined,
+        config: {
+          systemInstruction,
+          maxOutputTokens: clampedTokens,
+        },
       });
       responseText = fallbackResponse.text || '{}';
+      usageMetadata = fallbackResponse.usageMetadata;
     }
 
     let parsed: any;
@@ -193,7 +206,12 @@ Return JSON with this schema:
       throw new Error('Poem generation returned non-JSON output');
     }
 
-    return res.json({ success: true, poem: parsed });
+    return res.json({
+      success: true,
+      poem: parsed,
+      usageMetadata,
+      tokenLimit: clampedTokens,
+    });
   } catch (error: any) {
     console.error('Error in /api/compose-poem:', error);
     return res.status(500).json({ error: error?.message || 'Failed to compose Balochi poem' });
@@ -206,14 +224,20 @@ Return JSON with this schema:
  */
 app.post('/api/analyze-balochi', async (req: Request, res: Response) => {
   try {
-    const { text } = req.body;
+    const { text, maxOutputTokens = 1500 } = req.body;
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return res.status(400).json({ error: 'Balochi text is required' });
+    }
+
+    if (text.length > 10000) {
+      return res.status(400).json({ error: 'Text exceeds maximum character limit (10,000 characters).' });
     }
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(503).json({ error: 'GEMINI_API_KEY is not configured.' });
     }
+
+    const clampedTokens = Math.min(4096, Math.max(200, Number(maxOutputTokens) || 1500));
 
     const systemInstruction = `You are a native Balochi literary scholar and phoneticist.
 Analyze the provided Balochi text/poetry:
@@ -246,23 +270,32 @@ Return JSON with this schema:
 }`;
 
     let responseText = '';
+    let usageMetadata: any = null;
     const contents = [{ role: 'user' as const, parts: [{ text: userPrompt }] }];
 
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite',
         contents,
-        config: systemInstruction ? { systemInstruction } : undefined,
+        config: {
+          systemInstruction,
+          maxOutputTokens: clampedTokens,
+        },
       });
       responseText = response.text || '{}';
+      usageMetadata = response.usageMetadata;
     } catch (primaryErr: any) {
       console.warn('Error with gemini-3.1-flash-lite, trying gemini-3.8-flash:', primaryErr?.message);
       const fallbackResponse = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents,
-        config: systemInstruction ? { systemInstruction } : undefined,
+        config: {
+          systemInstruction,
+          maxOutputTokens: clampedTokens,
+        },
       });
       responseText = fallbackResponse.text || '{}';
+      usageMetadata = fallbackResponse.usageMetadata;
     }
 
     let parsed: any;
@@ -278,7 +311,12 @@ Return JSON with this schema:
       throw new Error('Analysis returned non-JSON output');
     }
 
-    return res.json({ success: true, analysis: parsed });
+    return res.json({
+      success: true,
+      analysis: parsed,
+      usageMetadata,
+      tokenLimit: clampedTokens,
+    });
   } catch (error: any) {
     console.error('Error in /api/analyze-balochi:', error);
     return res.status(500).json({ error: error?.message || 'Failed to analyze Balochi text' });
@@ -291,14 +329,20 @@ Return JSON with this schema:
  */
 app.post('/api/multi-speaker-tag', async (req: Request, res: Response) => {
   try {
-    const { text, speakerCount = 2, mode = 'dialogue' } = req.body;
+    const { text, speakerCount = 2, mode = 'dialogue', maxOutputTokens = 2000 } = req.body;
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return res.status(400).json({ error: 'Text is required for multi-speaker tagging' });
+    }
+
+    if (text.length > 10000) {
+      return res.status(400).json({ error: 'Text exceeds maximum character limit (10,000 characters).' });
     }
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(503).json({ error: 'GEMINI_API_KEY is not configured.' });
     }
+
+    const clampedTokens = Math.min(4096, Math.max(250, Number(maxOutputTokens) || 2000));
 
     const systemInstruction = `You are an expert native Balochi theatrical and literary director specializing in Balochi poetic recitation (شاهری و دیوان بلوچی).
 Your job is to take a Balochi poem or text and intelligently segment, partition, and tag it for ${speakerCount} distinct speakers for dramatic multi-speaker audio recitation (دکلمه چندصدایی / مناظره و همخوانی).
@@ -346,23 +390,32 @@ Return JSON format:
 }`;
 
     let responseText = '';
+    let usageMetadata: any = null;
     const contents = [{ role: 'user' as const, parts: [{ text: userPrompt }] }];
 
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite',
         contents,
-        config: systemInstruction ? { systemInstruction } : undefined,
+        config: {
+          systemInstruction,
+          maxOutputTokens: clampedTokens,
+        },
       });
       responseText = response.text || '{}';
+      usageMetadata = response.usageMetadata;
     } catch (primaryErr: any) {
       console.warn('Error in multi-speaker-tag with 3.1-lite, trying 3.8-flash:', primaryErr?.message);
       const fallbackResponse = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents,
-        config: systemInstruction ? { systemInstruction } : undefined,
+        config: {
+          systemInstruction,
+          maxOutputTokens: clampedTokens,
+        },
       });
       responseText = fallbackResponse.text || '{}';
+      usageMetadata = fallbackResponse.usageMetadata;
     }
 
     let parsed: any;
@@ -378,7 +431,12 @@ Return JSON format:
       throw new Error('Multi-speaker tagging returned non-JSON output');
     }
 
-    return res.json({ success: true, multiSpeakerData: parsed });
+    return res.json({
+      success: true,
+      multiSpeakerData: parsed,
+      usageMetadata,
+      tokenLimit: clampedTokens,
+    });
   } catch (error: any) {
     console.error('Error in /api/multi-speaker-tag:', error);
     return res.status(500).json({ error: error?.message || 'Failed to partition and tag text' });
@@ -391,10 +449,14 @@ Return JSON format:
  */
 app.post('/api/chat', async (req: Request, res: Response) => {
   try {
-    const { history = [], message, model = 'gemini-3.8-flash', systemInstruction } = req.body;
+    const { history = [], message, model = 'gemini-3.8-flash', systemInstruction, maxOutputTokens = 1000 } = req.body;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ error: 'Message text is required.' });
+    }
+
+    if (message.length > 8000) {
+      return res.status(400).json({ error: 'Message exceeds maximum character limit (8,000 characters).' });
     }
 
     if (!process.env.GEMINI_API_KEY) {
@@ -402,6 +464,8 @@ app.post('/api/chat', async (req: Request, res: Response) => {
         error: 'GEMINI_API_KEY is not configured. Please ensure your API key is configured in Settings > Secrets.',
       });
     }
+
+    const clampedTokens = Math.min(4096, Math.max(100, Number(maxOutputTokens) || 1000));
 
     const targetModel = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'].includes(model)
       ? model
@@ -433,18 +497,19 @@ app.post('/api/chat', async (req: Request, res: Response) => {
 
     let replyText = '';
     let usedModel = targetModel;
+    let usageMetadata: any = null;
 
     try {
       const response = await ai.models.generateContent({
         model: targetModel,
         contents,
-        config: systemInstruction
-          ? {
-              systemInstruction,
-            }
-          : undefined,
+        config: {
+          systemInstruction: systemInstruction || undefined,
+          maxOutputTokens: clampedTokens,
+        },
       });
       replyText = response.text || '';
+      usageMetadata = response.usageMetadata;
     } catch (primaryErr: any) {
       console.warn(`Primary model ${targetModel} error, trying fallback gemini-3.1-flash-lite:`, primaryErr?.message);
       if (targetModel !== 'gemini-3.1-flash-lite') {
@@ -452,13 +517,13 @@ app.post('/api/chat', async (req: Request, res: Response) => {
         const fallbackResponse = await ai.models.generateContent({
           model: 'gemini-3.1-flash-lite',
           contents,
-          config: systemInstruction
-            ? {
-                systemInstruction,
-              }
-            : undefined,
+          config: {
+            systemInstruction: systemInstruction || undefined,
+            maxOutputTokens: clampedTokens,
+          },
         });
         replyText = fallbackResponse.text || '';
+        usageMetadata = fallbackResponse.usageMetadata;
       } else {
         throw primaryErr;
       }
@@ -468,6 +533,8 @@ app.post('/api/chat', async (req: Request, res: Response) => {
       success: true,
       reply: replyText,
       model: usedModel,
+      usageMetadata,
+      tokenLimit: clampedTokens,
     });
   } catch (error: any) {
     console.error('Error in /api/chat:', error);
@@ -489,6 +556,9 @@ app.get('/api/status', (req: Request, res: Response) => {
     hasApiKey: Boolean(process.env.GEMINI_API_KEY),
   });
 });
+
+// Serve static assets from public folder (manifest, icons, etc.)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Vite dev server mounting in development or static hosting in production
 async function startServer() {

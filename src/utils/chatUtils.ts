@@ -1,8 +1,11 @@
+import { TokenUsageMetadata } from './tokenUtils';
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  usageMetadata?: TokenUsageMetadata;
 }
 
 export type ChatPersonaId = 'naseer' | 'scholar' | 'composer';

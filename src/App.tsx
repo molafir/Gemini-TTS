@@ -10,6 +10,7 @@ import { MusicStudio } from './components/MusicStudio';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { GlossaryModal } from './components/GlossaryModal';
 import { PoetBioModal } from './components/PoetBioModal';
+import { AndroidGeminiGuideModal } from './components/AndroidGeminiGuideModal';
 import { POEM_VERSES, GLOSSARY, Verse, TTS_VOICES } from './data/poem';
 import { buildTtsPrompt, buildSingleVerseTtsPrompt, searchVerses, formatFullPoemText } from './utils/poemUtils';
 import { requestSpeech } from './services/ttsService';
@@ -26,6 +27,7 @@ export default function App() {
   // Modals state
   const [isGlossaryOpen, setIsGlossaryOpen] = useState<boolean>(false);
   const [isBioOpen, setIsBioOpen] = useState<boolean>(false);
+  const [isAndroidGuideOpen, setIsAndroidGuideOpen] = useState<boolean>(false);
   const [selectedGlossaryWord, setSelectedGlossaryWord] = useState<string | null>(null);
 
   // Ambient sound state
@@ -249,6 +251,7 @@ export default function App() {
           setIsGlossaryOpen(true);
         }}
         onOpenBio={() => setIsBioOpen(true)}
+        onOpenAndroidGuide={() => setIsAndroidGuideOpen(true)}
         fontSize={fontSize}
         setFontSize={setFontSize}
         ambientPlaying={ambientPlaying}
@@ -441,6 +444,10 @@ export default function App() {
         selectedWord={selectedGlossaryWord}
       />
       <PoetBioModal isOpen={isBioOpen} onClose={() => setIsBioOpen(false)} />
+      <AndroidGeminiGuideModal
+        isOpen={isAndroidGuideOpen}
+        onClose={() => setIsAndroidGuideOpen(false)}
+      />
     </div>
   );
 }

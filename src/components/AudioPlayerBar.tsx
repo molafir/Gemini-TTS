@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Play,
   Pause,
@@ -10,8 +10,11 @@ import {
   Radio,
   Gauge,
   Sparkles,
+  Loader2,
+  Check,
 } from 'lucide-react';
 import { downloadAudioFile } from '../services/ttsService';
+import { convertWavToMp3Blob, downloadBlob } from '../utils/audioUtils';
 
 interface AudioPlayerBarProps {
   isPlaying: boolean;
@@ -46,6 +49,9 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   voiceName,
   audioDataUrl,
 }) => {
+  const [isDownloadingMp3, setIsDownloadingMp3] = useState<boolean>(false);
+  const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
+
   const formatTime = (seconds: number) => {
     if (isNaN(seconds) || seconds <= 0) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -53,7 +59,32 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const handleDownload = () => {
+  const handleDownloadMp3 = async () => {
+    if (!audioDataUrl || isDownloadingMp3) return;
+    try {
+      setIsDownloadingMp3(true);
+      const safeLabel = (currentTrackLabel || 'balochi-recitation')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'balochi-recitation';
+      const filename = `${safeLabel}-${voiceName.toLowerCase()}.mp3`;
+
+      const mp3Blob = await convertWavToMp3Blob(audioDataUrl);
+      downloadBlob(mp3Blob, filename);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    } catch (err) {
+      console.error('Failed to convert and download MP3:', err);
+      // Fallback download directly
+      downloadAudioFile(audioDataUrl, `balochi-recitation-${voiceName.toLowerCase()}.mp3`);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    } finally {
+      setIsDownloadingMp3(false);
+    }
+  };
+
+  const handleDownloadWav = () => {
     if (audioDataUrl) {
       downloadAudioFile(audioDataUrl, `balochi-recitation-${voiceName.toLowerCase()}.wav`);
     }
@@ -171,17 +202,43 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
             />
           </div>
 
-          {/* Download Audio */}
+          {/* Download Audio (MP3 & WAV) */}
           {audioDataUrl && (
-            <button
-              onClick={handleDownload}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition-colors"
-              title="Download Recitation WAV"
-              aria-label="Download audio file"
-            >
-              <Download className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden lg:inline">Download WAV</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleDownloadMp3}
+                disabled={isDownloadingMp3}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-950/40 disabled:opacity-75 disabled:cursor-not-allowed"
+                title="Save generated recitation as an MP3 file"
+                aria-label="Download audio as MP3"
+              >
+                {isDownloadingMp3 ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                    <span>Saving MP3...</span>
+                  </>
+                ) : downloadSuccess ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-slate-950 stroke-[3]" />
+                    <span>Saved MP3!</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5 text-slate-950" />
+                    <span>Download MP3</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleDownloadWav}
+                className="px-2 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-[11px] font-mono text-slate-400 hover:text-amber-300 transition-colors"
+                title="Download uncompressed WAV format"
+                aria-label="Download WAV format"
+              >
+                WAV
+              </button>
+            </div>
           )}
 
           {/* Close audio bar */}

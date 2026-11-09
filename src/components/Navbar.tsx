@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Film,
   Music,
+  Smartphone,
 } from 'lucide-react';
 import { ambientSound } from '../utils/ambientSound';
 
@@ -21,6 +22,7 @@ interface NavbarProps {
   setActiveTab: (tab: NavTabType) => void;
   onOpenGlossary: () => void;
   onOpenBio: () => void;
+  onOpenAndroidGuide: () => void;
   fontSize: number;
   setFontSize: (size: number) => void;
   ambientPlaying: boolean;
@@ -32,6 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   onOpenGlossary,
   onOpenBio,
+  onOpenAndroidGuide,
   fontSize,
   setFontSize,
   ambientPlaying,
@@ -206,6 +209,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Sparkles className="w-4 h-4 text-amber-400" />
               <span className="hidden sm:inline">Glossary</span>
+            </button>
+
+            {/* Android & Gemini App Integration Button */}
+            <button
+              onClick={onOpenAndroidGuide}
+              className="p-2 sm:px-3 sm:py-1.5 rounded-lg bg-gradient-to-r from-amber-600/30 to-amber-700/30 hover:from-amber-600/50 hover:to-amber-700/50 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-950/40"
+              title="افزودن به اپلیکیشن جمنای اندروید / نصب در گوشی"
+              aria-label="اتصال به جمنای و اندروید"
+            >
+              <Smartphone className="w-4 h-4 text-amber-400" />
+              <span className="hidden md:inline">اتصال به Gemini / اندروید</span>
             </button>
 
             {/* Poet Bio Button */}
